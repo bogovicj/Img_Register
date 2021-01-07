@@ -4,7 +4,9 @@ import torch
 from torch.utils.data import Dataset
 import glob
 import nrrd
-import os 
+import os
+
+import others.transform_converters as tc
 
 
 def random_crop(img, crop_point, crop_sz):
@@ -20,6 +22,22 @@ def random_crop(img, crop_point, crop_sz):
     return img[crop_point[0]:crop_point[0]+crop_sz[0],
                crop_point[1]:crop_point[1]+crop_sz[1],
                crop_point[2]:crop_point[2]+crop_sz[2]]
+
+def random_crop_tensor(tensor, crop_point, crop_sz):
+    """
+    Crop tensor
+    Args:
+        tensor: image in shape (1, x, y, z, c)
+        crop_point: point (x, y, z) to start cropping
+        crop_sz: cropping size in (x, y, z)
+    Return:
+        cropped image
+    """
+    return tensor[:,
+                  crop_point[0]:crop_point[0]+crop_sz[0],
+                  crop_point[1]:crop_point[1]+crop_sz[1],
+                  crop_point[2]:crop_point[2]+crop_sz[2],
+                  :]
 
 
 def flip_img(img, opt):
@@ -54,6 +72,75 @@ def rot_img(img, k):
         img = np.rot90(img, k, axes=(0,1))
     return img
 
+
+class GenerateDataDfield(Dataset):
+    """
+    Generate training and validation data
+    where the target is a displacement field
+    """
+    def __init__(self, img_list, dfield_list, crop_sz=None, normalize=False, augment=False):
+        """
+        Args:
+            img_list: a list of image files
+            dfield_list: a list of displacement field files
+            crop_sz: random cropping size
+        """
+        self.img_list = img_list
+        self.dfield_list = dfield_list
+        self.crop_sz = crop_sz
+        self.normalize = normalize
+
+        # TODO add augmentation at some point
+        #self.augment = augment
+
+    def __getitem__(self, idx):
+        """
+        Get specific data corresponding to the index
+        Args:
+            idx: data index
+        Returns:
+            tensor (img, dfield)
+        """
+        # Get image and template
+        img_name = self.img_list[idx]
+        img, head = nrrd.read(img_name)
+        img = np.float32(img)
+
+        dfield_name = self.dfield_list[idx]
+        dfield, dfield_spacing = tc.load_dfield(dfield_name)
+        pos_grid = tc.dfield_to_torch_position(dfield, dfield_spacing)
+
+        # Normalize image
+        # position grid does not need normalizing
+        if self.normalize:
+            img = (img-img.mean()) / img.std()
+
+        # To tensor, shape (channel, x, y, z)
+        img = torch.from_numpy(img.copy()).float()
+        img = img.unsqueeze( 0 ).unsqueeze( 4 )
+        # img is [1 x y z 1]
+
+        # maybe skip crop, initially too?
+        if self.crop_sz is not None:
+            # Crop on image and template
+            x = np.random.randint(0, img.shape[0]-self.crop_sz[0]+1)
+            y = np.random.randint(0, img.shape[1]-self.crop_sz[1]+1)
+            z = np.random.randint(0, img.shape[2]-self.crop_sz[2]+1)
+
+            img = random_crop_tensor(img, (x,y,z), self.crop_sz)
+            pos_grid = random_crop_tensor(pos_grid, (x,y,z), self.crop_sz)
+
+        # # Augmentation to image and template
+        # if self.augment:
+        #     opt = np.random.randint(4)
+        #     img = flip_img(img, opt)
+        #     k = np.random.randint(4)
+        #     img = rot_img(img, k)
+
+        return [img, pos_grid]
+
+    def __len__(self):
+        return len(self.img_list)
 
 class GenerateData(Dataset):
     """
@@ -120,6 +207,12 @@ class GenerateData(Dataset):
     def __len__(self):
         return len(self.img_list)
 
+def dfield2grid( dfield ):
+    return dfield
+
+def grid2dfield( grid ):
+    dfield = grid[[2, 1, 0], ...] # permute axes
+    return dfield
 
 if __name__ == "__main__":
 
