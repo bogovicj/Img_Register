@@ -72,6 +72,76 @@ def rot_img(img, k):
         img = np.rot90(img, k, axes=(0,1))
     return img
 
+class GenerateDataDfieldRand(Dataset):
+    """
+    Generate training and validation data
+    where the target is a displacement field
+    """
+    def __init__(self, sz, N, normalize=False, augment=False, preload=True):
+        """
+        Args:
+            sz: the size of random patches
+        """
+        self.sz = sz
+
+        self.grid_sz = sz.copy()
+        self.grid_sz.insert(0,3)
+
+        self.N = N
+        self.normalize = normalize
+
+        # TODO add augmentation at some point
+        #self.augment = augment
+
+        self.preload = preload
+
+        self.img_loaded_list = []
+        self.posgrid_loaded_list = []
+
+
+    def __getitem__(self, idx):
+        """
+        Get specific data corresponding to the index
+        Args:
+            idx: data index
+        Returns:
+            tensor (img, dfield)
+        """
+        im = torch.randn(self.sz)
+
+        #img2 = torch.randn(self.sz) + 3
+        #return [img, img2]
+
+        pos_grid = torch.randn(self.grid_sz)
+        return [im, pos_grid]
+
+    def __len__(self):
+        return self.N
+
+def grid_collate_fun( batch ):
+    """
+    :param batch: list of [ imgs, grid ]
+    :return: list of tensors
+    """
+
+    for i,x in enumerate(batch):
+        print( i )
+        print( x[0].size())
+        print( x[1].size())
+        print( ' ')
+
+
+    imgs = [x[0].unsqueeze(0) for x in batch]
+    grids = [x[1] for x in batch]
+
+    imt = torch.stack( imgs, dim=0 )
+    gridt = torch.stack( grids, dim=0 )
+
+    print(imt.size())
+    print(gridt.size())
+
+    return [imt, gridt]
+
 def crop_pad_to( img, sz, is_grid=False ):
     """
     Zero-crops and pads the img about its center as necessary
@@ -115,7 +185,7 @@ class GenerateDataDfield(Dataset):
     Generate training and validation data
     where the target is a displacement field
     """
-    def __init__(self, img_list, dfield_list, crop_sz=None, normalize=False, augment=False):
+    def __init__(self, img_list, dfield_list, crop_sz=(128,64,64), normalize=False, augment=False, preload=True):
         """
         Args:
             img_list: a list of image files
@@ -130,6 +200,12 @@ class GenerateDataDfield(Dataset):
         # TODO add augmentation at some point
         #self.augment = augment
 
+        self.preload = preload
+
+        self.img_loaded_list = []
+        self.posgrid_loaded_list = []
+
+
     def __getitem__(self, idx):
         """
         Get specific data corresponding to the index
@@ -142,6 +218,7 @@ class GenerateDataDfield(Dataset):
         img_name = self.img_list[idx]
         img, head = nrrd.read(img_name)
         img = np.float32(img)
+        img = crop_pad_to( img, self.crop_sz )
 
         dfield_name = self.dfield_list[idx]
         dfield, dfield_spacing = tc.load_dfield(dfield_name)
