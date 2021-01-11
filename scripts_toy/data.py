@@ -72,6 +72,43 @@ def rot_img(img, k):
         img = np.rot90(img, k, axes=(0,1))
     return img
 
+def crop_pad_to( img, sz, is_grid=False ):
+    """
+    Zero-crops and pads the img about its center as necessary
+    so its output is the given size. 3d only.
+
+    :param img: the image
+    :param sz: the desired size
+    :return: the cropped and padded image
+    """
+
+    # find dimensions that need padding
+    img_sz = np.array(img.shape)[:3]
+    sz = np.array(sz)
+
+    # make pad_img as at least as big as sz
+    pad_amt = np.ceil(np.max((sz - img_sz)/2.)).astype(int)
+    if is_grid:
+        pad_list = [ np.pad(img[:,:,:,i], pad_amt) for i in range(img.shape[3])]
+        pad_img = np.transpose( np.stack(pad_list), (1,2,3,0))
+
+    else:
+        pad_img = np.pad(img, pad_amt)
+
+    pad_img_sz = np.array(pad_img.shape)[:3]
+
+    lo = np.floor((pad_img_sz - sz)/ 2.0).astype(int)
+
+    if is_grid:
+        return pad_img[lo[0] : lo[0]+sz[0],
+               lo[1] : lo[1]+sz[1],
+               lo[2] : lo[2]+sz[2],
+               :]
+    else:
+        return pad_img[lo[0] : lo[0]+sz[0],
+                       lo[1] : lo[1]+sz[1],
+                       lo[2] : lo[2]+sz[2]]
+
 
 class GenerateDataDfield(Dataset):
     """
