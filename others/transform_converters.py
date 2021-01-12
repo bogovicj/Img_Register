@@ -136,7 +136,7 @@ def dfield_to_torch_position(dfield, spacing=[1., 1., 1.]):
     id_grid_stack = torch.stack( identity_grid ).permute(3, 2, 1, 0)
     position_grid = (id_grid_stack + dfield_t)
 
-    return position_grid.unsqueeze(0)
+    return position_grid
 
 
 if __name__ == '__main__':

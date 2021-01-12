@@ -222,7 +222,9 @@ class GenerateDataDfield(Dataset):
 
         dfield_name = self.dfield_list[idx]
         dfield, dfield_spacing = tc.load_dfield(dfield_name)
-        pos_grid = tc.dfield_to_torch_position(dfield, dfield_spacing)
+        df = crop_pad_to(dfield, self.crop_sz, is_grid=True)
+        pos_grid = tc.dfield_to_torch_position(df, dfield_spacing) # pos_grid is [x,y,z,3]
+        pos_grid = pos_grid.permute((3,0,1,2)) # pos_grid is [3,x,y,z]
 
         # Normalize image
         # position grid does not need normalizing
@@ -231,25 +233,7 @@ class GenerateDataDfield(Dataset):
 
         # To tensor, shape (channel, x, y, z)
         img = torch.from_numpy(img.copy()).float()
-        img = img.unsqueeze( 0 ).unsqueeze( 4 )
-        # img is [1 x y z 1]
-
-        # maybe skip crop, initially too?
-        if self.crop_sz is not None:
-            # Crop on image and template
-            x = np.random.randint(0, img.shape[0]-self.crop_sz[0]+1)
-            y = np.random.randint(0, img.shape[1]-self.crop_sz[1]+1)
-            z = np.random.randint(0, img.shape[2]-self.crop_sz[2]+1)
-
-            img = random_crop_tensor(img, (x,y,z), self.crop_sz)
-            pos_grid = random_crop_tensor(pos_grid, (x,y,z), self.crop_sz)
-
-        # # Augmentation to image and template
-        # if self.augment:
-        #     opt = np.random.randint(4)
-        #     img = flip_img(img, opt)
-        #     k = np.random.randint(4)
-        #     img = rot_img(img, k)
+        # img is [x y z]
 
         return [img, pos_grid]
 
